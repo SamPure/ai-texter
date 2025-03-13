@@ -332,6 +332,79 @@ app.use((req, res, next) => {
     next();
 });
 
+// Add findBrokerByPhone function before the webhook handler
+// Function to find a broker by phone number
+async function findBrokerByPhone(phoneNumber) {
+    console.log('No email found, trying to look up broker by phone number:', phoneNumber);
+    try {
+        const supabase = await initializeSupabase();
+        
+        // Normalize the phone number by removing any non-digit characters
+        const normalizedPhone = String(phoneNumber).replace(/\D/g, '');
+        
+        // Look up broker by phone number
+        const { data: broker, error } = await supabase
+            .from('brokers')
+            .select('*')
+            .eq('phone_number', normalizedPhone)
+            .single();
+        
+        if (error) {
+            console.error('Error looking up broker by phone number:', error);
+            return null;
+        }
+        
+        if (broker) {
+            console.log('Found broker by phone number:', broker.email);
+            return broker;
+        }
+        
+        console.log('No broker found with phone number:', normalizedPhone);
+        return null;
+    } catch (error) {
+        console.error('Error in findBrokerByPhone:', error);
+        return null;
+    }
+}
+
+// Add saveConversation function before the webhook handler
+// Function to save a conversation to the database
+async function saveConversation(phoneNumber, userMessage, aiResponse, brokerEmail) {
+    try {
+        console.log('🔌 Connecting to Supabase...');
+        const supabase = await initializeSupabase();
+        
+        console.log('🔍 Looking up broker:', brokerEmail);
+        
+        // Normalize the phone number
+        const normalizedPhone = String(phoneNumber).replace(/\D/g, '');
+        
+        // Create the conversation entry
+        const { data: conversation, error } = await supabase
+            .from('conversations')
+            .insert([{
+                broker_email: brokerEmail,
+                phone_number: normalizedPhone,
+                user_message: userMessage,
+                ai_response: aiResponse,
+                created_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+            
+        if (error) {
+            console.error('❌ Error saving conversation:', error);
+            return null;
+        }
+        
+        console.log('✓ Conversation saved with ID:', conversation.id);
+        return conversation;
+    } catch (error) {
+        console.error('❌ Error in saveConversation:', error);
+        return null;
+    }
+}
+
 // Completely revamped webhook handler
 app.post('/webhook', async (req, res) => {
     const startTime = Date.now();
@@ -391,7 +464,7 @@ app.post('/webhook', async (req, res) => {
         // Generate AI response with proper fallback
         let aiResponse;
         try {
-            aiResponse = await generateAIResponse(message, broker);
+            aiResponse = await aiHandler.generateAIResponse(message, broker);
         } catch (error) {
             console.error('❌ AI response generation failed:', error);
             aiResponse = `Hi, this is ${broker.name}'s automated assistant. Our AI system is currently unavailable. Please email ${broker.email} directly.`;
