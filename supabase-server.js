@@ -564,6 +564,22 @@ app.post('/webhook', async (req, res) => {
         // Save conversation
         await saveConversation(customerNumber, message, aiResponse, broker.email);
 
+        // Send SMS response via Kixie
+        try {
+            console.log('📱 Sending SMS response to customer:', customerNumber);
+            
+            // Use SMS service to send the message
+            const smsResult = await smsService.sendSMS({
+                fromNumber: brokerNumber,
+                toNumber: customerNumber,
+                message: aiResponse
+            });
+            
+            console.log('📲 SMS sending result:', smsResult);
+        } catch (error) {
+            console.error('❌ Failed to send SMS response:', error);
+        }
+
         const processingTime = Date.now() - startTime;
         console.log('✅ Webhook complete:', {
             processingTime: `${processingTime}ms`,
