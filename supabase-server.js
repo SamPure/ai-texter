@@ -341,20 +341,33 @@ async function findBrokerByPhone(phoneNumber) {
         // Normalize the phone number by removing any non-digit characters
         let normalizedPhone = String(phoneNumber).replace(/\D/g, '');
         
-        // If the number starts with a country code (like "1" for US), try both with and without it
+        // Create variations with and without country code
         let phoneVariations = [normalizedPhone];
-        if (normalizedPhone.startsWith('1') && normalizedPhone.length > 10) {
-            // Also try without the leading "1"
-            phoneVariations.push(normalizedPhone.substring(1));
-        } else if (normalizedPhone.length === 10) {
-            // Also try with a leading "1"
+        
+        // Add variation with exactly 10 digits (no country code)
+        if (normalizedPhone.length > 10) {
+            phoneVariations.push(normalizedPhone.slice(-10));
+        }
+        
+        // Add variation with US country code (1) + 10 digits
+        if (normalizedPhone.length === 10) {
             phoneVariations.push('1' + normalizedPhone);
         }
         
-        console.log('Trying phone number variations:', phoneVariations);
+        // Add more variations with +, dashes, etc. for extra querying options
+        phoneVariations.push('+' + normalizedPhone);
+        if (normalizedPhone.length === 10) {
+            phoneVariations.push('+1' + normalizedPhone);
+        }
         
-        // Try each phone variation
+        // Only keep unique variations
+        phoneVariations = [...new Set(phoneVariations)];
+        
+        console.log('🔢 Trying these phone number variations:', phoneVariations);
+        
+        // First try direct matches
         for (const phoneVar of phoneVariations) {
+            // Exact match with phone_number field
             const { data: brokers, error } = await supabase
                 .from('brokers')
                 .select('*')
@@ -366,12 +379,31 @@ async function findBrokerByPhone(phoneNumber) {
             }
             
             if (brokers && brokers.length > 0) {
-                console.log(`Found ${brokers.length} broker(s) with phone number:`, phoneVar);
+                console.log(`✅ Found ${brokers.length} broker(s) with exact phone match:`, phoneVar);
                 return brokers[0]; // Return the first match
             }
         }
         
-        console.log('No broker found with phone number variations:', phoneVariations);
+        // If no exact matches, try LIKE queries for partial matches
+        for (const phoneVar of phoneVariations) {
+            // Look for brokers where phone number contains this variation
+            const { data: brokers, error } = await supabase
+                .from('brokers')
+                .select('*')
+                .like('phone_number', `%${phoneVar.slice(-8)}%`); // Match last 8 digits
+            
+            if (error) {
+                console.error('Error with LIKE query for phone number:', error);
+                continue;
+            }
+            
+            if (brokers && brokers.length > 0) {
+                console.log(`✅ Found ${brokers.length} broker(s) with partial phone match:`, phoneVar);
+                return brokers[0]; // Return the first match
+            }
+        }
+        
+        console.log('❌ No broker found with any phone number variation');
         return null;
     } catch (error) {
         console.error('Error in findBrokerByPhone:', error);
@@ -427,18 +459,26 @@ app.post('/webhook', async (req, res) => {
         const data = req.body?.data || req.body || {};
         console.log('Webhook payload:', JSON.stringify(data, null, 2));
         
-        // Extract required fields with fallbacks
+        // Prioritize using the broker's email from Kixie
+        const kixieEmail = String(data.email || '').trim();
+        
+        // Extract numbers with clear labels
         const customerNumber = String(data.from || data.customernumber || data.phone || data.number || '').trim();
         const brokerNumber = String(data.to || data.businessnumber || '').trim();
         const message = String(data.message || data.text || data.content || '').trim();
         const direction = String(data.direction || '').toLowerCase();
-        const kixieEmail = String(data.email || '').trim();
         
-        console.log('Extracted fields:', { customerNumber, brokerNumber, message, direction, kixieEmail });
+        console.log('Extracted fields:', { 
+            customerNumber, 
+            brokerNumber, 
+            message, 
+            direction, 
+            kixieEmail 
+        });
         
         // Immediately ignore outgoing messages to prevent loops
         if (direction === 'outgoing') {
-            console.log('📤 Ignoring outgoing message');
+            console.log('📤 Ignoring outgoing message - direction is outgoing');
             return res.json({
                 success: true,
                 message: 'Outgoing message ignored'
@@ -446,42 +486,56 @@ app.post('/webhook', async (req, res) => {
         }
 
         // Validate required fields
-        if (!customerNumber || !message || !brokerNumber) {
-            console.error('❌ Missing required fields:', { customerNumber, brokerNumber, message });
+        if (!customerNumber || !message) {
+            console.error('❌ Missing required fields:', { customerNumber, message });
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields',
-                missing: { customerNumber: !customerNumber, brokerNumber: !brokerNumber, message: !message }
+                missing: { customerNumber: !customerNumber, message: !message }
             });
         }
 
-        // Look up broker - first try by email if available
+        // Look up broker using multiple methods
         let broker = null;
+        
+        // 1. First try by Kixie email if available
         if (kixieEmail) {
-            console.log('Looking up broker by email:', kixieEmail);
+            console.log('🔍 FIRST: Looking up broker by Kixie email:', kixieEmail);
             const supabase = await initializeSupabase();
             const { data: brokerByEmail, error } = await supabase
                 .from('brokers')
                 .select('*')
-                .eq('email', kixieEmail)
-                .single();
+                .ilike('email', kixieEmail);  // Use case-insensitive match
                 
-            if (!error && brokerByEmail) {
-                broker = brokerByEmail;
-                console.log('Found broker by email:', broker.name);
+            if (!error && brokerByEmail && brokerByEmail.length > 0) {
+                broker = brokerByEmail[0];
+                console.log('✅ Found broker by Kixie email:', broker.name);
+            } else {
+                console.log('❌ No broker found by Kixie email:', kixieEmail);
             }
         }
         
-        // If no broker found by email, try by phone number
-        if (!broker) {
+        // 2. Try by broker's business number if no broker found by email and broker number is available
+        if (!broker && brokerNumber) {
+            console.log('🔍 SECOND: Looking up broker by business phone number:', brokerNumber);
             broker = await findBrokerByPhone(brokerNumber);
+            if (broker) {
+                console.log('✅ Found broker by business phone number:', broker.name);
+            } else {
+                console.log('❌ No broker found by business phone number:', brokerNumber);
+            }
         }
         
+        // Failed to find broker
         if (!broker) {
-            console.log('No broker found for number:', brokerNumber);
+            console.log('❌ No broker found by any method. Email:', kixieEmail, 'Business Phone:', brokerNumber);
             return res.status(404).json({
                 success: false,
-                error: 'Broker not found'
+                error: 'Broker not found',
+                details: {
+                    kixieEmail: kixieEmail || 'Not provided',
+                    brokerNumber: brokerNumber || 'Not provided'
+                }
             });
         }
 
@@ -1132,6 +1186,41 @@ app.get('/api/test-webhook', (req, res) => {
             errors: serverState.errorCount
         }
     });
+});
+
+// Add diagnostic endpoint to list all brokers for debugging
+app.get('/api/brokers/debug', async (req, res) => {
+    try {
+        console.log('Retrieving all brokers for debugging');
+        const supabase = await initializeSupabase();
+        
+        const { data, error } = await supabase
+            .from('brokers')
+            .select('id, name, email, phone_number, active')
+            .order('name', { ascending: true });
+
+        if (error) {
+            console.error('Error fetching brokers:', error);
+            throw error;
+        }
+        
+        console.log(`Found ${data.length} brokers:`);
+        data.forEach(broker => {
+            console.log(`- ${broker.name} (${broker.phone_number}): ${broker.active ? 'ACTIVE' : 'INACTIVE'}`);
+        });
+        
+        res.json({
+            success: true,
+            count: data.length,
+            brokers: data
+        });
+    } catch (error) {
+        console.error('Debug endpoint failed:', error);
+        res.status(500).json({ 
+            error: 'Failed to retrieve brokers',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
 });
 
 // Start the server
