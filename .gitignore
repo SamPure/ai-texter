@@ -1,0 +1,15 @@
+.env
+node_modules/
+.DS_Store
+
+node_modules
+.env
+package-lock.json
+npm-debug.log
+.DS_Store
+*.log
+.vscode/
+.idea/
+dist/
+build/
+coverage/

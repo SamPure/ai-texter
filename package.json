@@ -1,0 +1,39 @@
+{
+  "name": "ai-texter",
+  "version": "1.0.0",
+  "main": "supabase-server.js",
+  "scripts": {
+    "start": "node supabase-server.js",
+    "dev": "nodemon supabase-server.js",
+    "test": "node test-endpoints.js",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "keywords": ["ai", "sms", "texting", "openai", "supabase"],
+  "author": "",
+  "license": "ISC",
+  "description": "AI-powered SMS response system integrated with Kixie and OpenAI",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.7",
+    "axios": "^1.6.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.3",
+    "fs": "^0.0.1-security",
+    "moment": "^2.30.1",
+    "moment-timezone": "^0.5.45",
+    "node-cron": "^3.0.3",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^6.9.11",
+    "openai": "^4.28.4",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "nodemon": "^3.1.0",
+    "prettier": "^3.2.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

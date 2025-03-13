@@ -1,0 +1,1 @@
+const express = require("express"); const cors = require("cors"); const app = express(); app.use(cors()); app.use(express.json()); app.post("/training", (req, res) => { console.log("Received:", req.body); res.json({ success: true }); }); app.get("/", (req, res) => res.json({ status: "ok" })); app.listen(3000, () => console.log("Server running on port 3000"));

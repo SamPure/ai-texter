@@ -1,0 +1,145 @@
+/* Admin Interface Styles */
+body {
+    background-color: #f8f9fa;
+}
+
+.navbar {
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.section {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.table th {
+    background-color: #f8f9fa;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+.btn-group-sm > .btn, .btn-sm {
+    margin: 0 2px;
+}
+
+/* Conversation Messages */
+.conversation-messages {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.message {
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.message.user {
+    background-color: #e9ecef;
+    margin-left: 2rem;
+}
+
+.message.assistant {
+    background-color: #f8f9fa;
+    margin-right: 2rem;
+    border: 1px solid #dee2e6;
+}
+
+/* Form Controls */
+.form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+}
+
+/* Alerts */
+.alert {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1050;
+    min-width: 300px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Modal */
+.modal-content {
+    border-radius: 8px;
+}
+
+.modal-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    border-radius: 8px 8px 0 0;
+}
+
+.modal-footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    border-radius: 0 0 8px 8px;
+}
+
+.badge {
+    font-size: 0.9em;
+    padding: 0.5em 0.7em;
+}
+
+#brokers-section {
+    margin-bottom: 2rem;
+}
+
+.modal-dialog {
+    max-width: 500px;
+}
+
+.table-responsive {
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* Dark mode navbar customization */
+.navbar-dark {
+    background-color: #1a1a1a !important;
+}
+
+/* Custom button styling */
+.btn-primary {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.btn-primary:hover {
+    background-color: #003d82;
+    border-color: #003d82;
+}
+
+/* Table hover effect */
+.table-striped tbody tr:hover {
+    background-color: rgba(0,0,0,.05);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .section {
+        padding: 1rem;
+    }
+    
+    .table-responsive {
+        margin: 0 -1rem;
+    }
+    
+    .alert {
+        left: 1rem;
+        right: 1rem;
+        min-width: auto;
+    }
+}
