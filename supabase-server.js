@@ -569,11 +569,11 @@ app.post('/webhook', async (req, res) => {
             console.log('📱 Sending SMS response to customer:', customerNumber);
             
             // Use SMS service to send the message
-            const smsResult = await smsService.sendSMS({
-                fromNumber: brokerNumber,
-                toNumber: customerNumber,
-                message: aiResponse
-            });
+            const smsResult = await smsService.sendSMS(
+                customerNumber,  // to
+                aiResponse,      // message
+                broker.email     // brokerEmail
+            );
             
             console.log('📲 SMS sending result:', smsResult);
         } catch (error) {
