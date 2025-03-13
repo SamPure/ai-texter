@@ -332,34 +332,46 @@ app.use((req, res, next) => {
     next();
 });
 
-// Add findBrokerByPhone function before the webhook handler
 // Function to find a broker by phone number
 async function findBrokerByPhone(phoneNumber) {
-    console.log('No email found, trying to look up broker by phone number:', phoneNumber);
+    console.log('Looking up broker by phone number:', phoneNumber);
     try {
         const supabase = await initializeSupabase();
         
         // Normalize the phone number by removing any non-digit characters
-        const normalizedPhone = String(phoneNumber).replace(/\D/g, '');
+        let normalizedPhone = String(phoneNumber).replace(/\D/g, '');
         
-        // Look up broker by phone number
-        const { data: broker, error } = await supabase
-            .from('brokers')
-            .select('*')
-            .eq('phone_number', normalizedPhone)
-            .single();
-        
-        if (error) {
-            console.error('Error looking up broker by phone number:', error);
-            return null;
+        // If the number starts with a country code (like "1" for US), try both with and without it
+        let phoneVariations = [normalizedPhone];
+        if (normalizedPhone.startsWith('1') && normalizedPhone.length > 10) {
+            // Also try without the leading "1"
+            phoneVariations.push(normalizedPhone.substring(1));
+        } else if (normalizedPhone.length === 10) {
+            // Also try with a leading "1"
+            phoneVariations.push('1' + normalizedPhone);
         }
         
-        if (broker) {
-            console.log('Found broker by phone number:', broker.email);
-            return broker;
+        console.log('Trying phone number variations:', phoneVariations);
+        
+        // Try each phone variation
+        for (const phoneVar of phoneVariations) {
+            const { data: brokers, error } = await supabase
+                .from('brokers')
+                .select('*')
+                .eq('phone_number', phoneVar);
+            
+            if (error) {
+                console.error('Error looking up broker by phone number:', error);
+                continue;
+            }
+            
+            if (brokers && brokers.length > 0) {
+                console.log(`Found ${brokers.length} broker(s) with phone number:`, phoneVar);
+                return brokers[0]; // Return the first match
+            }
         }
         
-        console.log('No broker found with phone number:', normalizedPhone);
+        console.log('No broker found with phone number variations:', phoneVariations);
         return null;
     } catch (error) {
         console.error('Error in findBrokerByPhone:', error);
@@ -416,9 +428,13 @@ app.post('/webhook', async (req, res) => {
         console.log('Webhook payload:', JSON.stringify(data, null, 2));
         
         // Extract required fields with fallbacks
-        const from = String(data.from || data.customernumber || data.phone || data.number || '').trim();
+        const customerNumber = String(data.from || data.customernumber || data.phone || data.number || '').trim();
+        const brokerNumber = String(data.to || data.businessnumber || '').trim();
         const message = String(data.message || data.text || data.content || '').trim();
         const direction = String(data.direction || '').toLowerCase();
+        const kixieEmail = String(data.email || '').trim();
+        
+        console.log('Extracted fields:', { customerNumber, brokerNumber, message, direction, kixieEmail });
         
         // Immediately ignore outgoing messages to prevent loops
         if (direction === 'outgoing') {
@@ -430,18 +446,39 @@ app.post('/webhook', async (req, res) => {
         }
 
         // Validate required fields
-        if (!from || !message) {
-            console.error('❌ Missing required fields:', { from, message });
+        if (!customerNumber || !message || !brokerNumber) {
+            console.error('❌ Missing required fields:', { customerNumber, brokerNumber, message });
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields',
-                missing: { from: !from, message: !message }
+                missing: { customerNumber: !customerNumber, brokerNumber: !brokerNumber, message: !message }
             });
         }
 
-        // Look up broker
-        const broker = await findBrokerByPhone(from);
+        // Look up broker - first try by email if available
+        let broker = null;
+        if (kixieEmail) {
+            console.log('Looking up broker by email:', kixieEmail);
+            const supabase = await initializeSupabase();
+            const { data: brokerByEmail, error } = await supabase
+                .from('brokers')
+                .select('*')
+                .eq('email', kixieEmail)
+                .single();
+                
+            if (!error && brokerByEmail) {
+                broker = brokerByEmail;
+                console.log('Found broker by email:', broker.name);
+            }
+        }
+        
+        // If no broker found by email, try by phone number
         if (!broker) {
+            broker = await findBrokerByPhone(brokerNumber);
+        }
+        
+        if (!broker) {
+            console.log('No broker found for number:', brokerNumber);
             return res.status(404).json({
                 success: false,
                 error: 'Broker not found'
@@ -471,7 +508,7 @@ app.post('/webhook', async (req, res) => {
         }
 
         // Save conversation
-        await saveConversation(from, message, aiResponse, broker.email);
+        await saveConversation(customerNumber, message, aiResponse, broker.email);
 
         const processingTime = Date.now() - startTime;
         console.log('✅ Webhook complete:', {
